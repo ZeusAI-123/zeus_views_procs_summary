@@ -11,68 +11,130 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 # =======================
 
 VIEW_PROMPT = """
-Act as a Senior Data Architect.
+Act as a Technical Data Analyst.
 
-Your task is to perform a deep-dive analysis of the following SQL VIEW definition and generate a comprehensive
-"Technical Documentation & Lineage Report" for a new developer.
+Analyze the provided SQL VIEW definition and generate a high-density
+Technical Specification Mapping.
 
 GOAL:
-Ensure a developer with no prior knowledge of this system can understand the business logic,
-data dependencies, and output structure within minutes.
+Provide a developer with a concise cheat sheet of the logic,
+without excessive explanation or storytelling.
 
 IMPORTANT RULES:
-- Do NOT suggest modifying, optimizing, or executing the SQL
-- Explain the logic clearly in business + technical terms
-- Assume the reader is new to the system
+- Do NOT suggest changes, optimizations, or execution
+- Stick strictly to the requested format
+- Be precise and technical
+- Assume the reader understands SQL basics
 
-VIEW NAME:
+========================
+SQL VIEW NAME:
 {object_name}
 
 SQL VIEW DEFINITION:
 {object_sql}
+========================
 
-DOCUMENTATION FORMAT (STRICT):
+STRUCTURE THE RESPONSE USING THIS EXACT FORMAT:
 
-1. Executive Summary
-2. Source Tables & Dependencies
-3. Logical Flow
-4. Field Dictionary
-5. Performance & Scaling Notes
-6. Example Usage
+1. Object Metadata
+View Name: {object_name}
+
+Primary Grain:
+(Describe what one row represents, e.g., one row per customer per day)
+
+Refresh Type:
+(Standard View / Materialized View – infer from SQL if possible)
+
+2. Source Mapping & Joins
+
+Alias | Source Table/View | Join Type | Join Condition | Purpose
+
+3. Filtering Logic (WHERE / HAVING)
+- List each filter condition exactly as used
+- Explain the business rule for each condition
+
+4. Calculated Columns Logic
+List ONLY columns involving:
+- CASE statements
+- Mathematical calculations
+- String manipulation
+
+Format:
+Column_Name: Explanation of logic
+
+5. Performance Critical Fields
+- Columns used in JOIN conditions
+- Columns used in WHERE / HAVING clauses
+- Mention base tables where indexing is important
 """
 
 PROC_PROMPT = """
-Act as a Lead Database Engineer.
+Act as a Senior Backend Developer.
 
-Perform a technical audit and generate a detailed
-"Standard Operating Procedure (SOP) Document" for the following SQL Stored Procedure.
+Analyze the following SQL STORED PROCEDURE and generate a
+Technical Execution Map.
 
 GOAL:
-Create a maintenance-ready guide explaining exactly how the data state changes
-when this procedure is executed.
+Provide a concise technical breakdown so a developer can debug,
+maintain, or modify the procedure without reading the entire code.
 
 IMPORTANT RULES:
 - Do NOT rewrite or optimize SQL
 - Do NOT suggest improvements
-- Focus strictly on behavior, data impact, and operational understanding
+- Focus on execution behavior and data flow
+- Use bullet points and step-based explanations
 
-PROCEDURE NAME:
+========================
+SQL PROCEDURE NAME:
 {object_name}
 
 SQL PROCEDURE DEFINITION:
 {object_sql}
+========================
 
-DOCUMENTATION FORMAT (STRICT):
+STRUCTURE THE RESPONSE USING THIS EXACT FORMAT:
 
-1. Procedure Purpose
-2. Input / Output Parameters
-3. Execution Logic & Flow
-4. Data Impact (CRUD Analysis)
-5. Transaction & Error Handling
-6. Dependency Map
-7. Maintenance Warnings
+1. Interface (Input / Output)
+
+Parameter | Data Type | Default | Direction | Purpose
+
+2. Dependency List
+Reads From:
+- List tables/views queried
+
+Writes To:
+- List tables inserted/updated/deleted
+
+Calls:
+- Other procedures, functions, or triggers (if any)
+
+3. Transactional Flow (Step-by-Step)
+Step 1:
+- Describe the first logical operation
+
+Step 2:
+- Describe the next major action
+
+Step N:
+- Continue until procedure completion
+
+4. Logic & Transformation Rules
+Filtering:
+- WHERE clause conditions used in main logic
+
+Business Rules:
+- CASE expressions
+- IF / ELSE branching
+- Conditional data flow rules
+
+5. Error Handling & Commit Logic
+Transactions:
+- Explicit (BEGIN TRAN / COMMIT / ROLLBACK) or Implicit
+
+Error Catching:
+- TRY...CATCH blocks
+- RAISERROR or THROW usage
 """
-
 
 # =======================
 # MAIN FUNCTION
@@ -80,7 +142,8 @@ DOCUMENTATION FORMAT (STRICT):
 
 def generate_sql_documentation(object_name, object_type, object_sql):
     """
-    Generates GenAI documentation for SQL Views and Stored Procedures
+    Generates GenAI technical documentation for SQL Views and Stored Procedures
+    using Vijay Sir–defined formats.
     """
 
     if object_type.lower() == "view":
@@ -102,7 +165,7 @@ def generate_sql_documentation(object_name, object_type, object_sql):
         model="gpt-4o-mini",
         temperature=0.2,
         messages=[
-            {"role": "system", "content": "You are an expert SQL documentation generator."},
+            {"role": "system", "content": "You are an expert SQL technical documentation generator."},
             {"role": "user", "content": prompt}
         ]
     )
