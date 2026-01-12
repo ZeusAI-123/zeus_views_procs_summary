@@ -142,7 +142,7 @@ Error Catching:
 
 def generate_sql_documentation(object_name, object_type, object_sql):
     """
-    Generates GenAI technical documentation for SQL Views and Stored Procedures
+    Generates GenAI technical documentation for SQL Views and Stored Procedure
     .
     """
 
