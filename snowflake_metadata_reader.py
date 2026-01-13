@@ -30,16 +30,12 @@ def get_object_definition_sf(conn, object_name, object_type):
     cursor = conn.cursor()
     try:
         if object_type.lower() == "view":
-            cursor.execute(
-                f"SHOW VIEWS LIKE '{object_name}' IN SCHEMA CURRENT_SCHEMA()"
-            )
+            cursor.execute(f"SHOW VIEWS LIKE '{object_name}'")
             row = cursor.fetchone()
             return row[6] if row else ""
 
         elif object_type.lower() == "procedure":
-            cursor.execute(
-                f"SHOW PROCEDURES LIKE '{object_name}' IN SCHEMA CURRENT_SCHEMA()"
-            )
+            cursor.execute(f"SHOW PROCEDURES LIKE '{object_name}'")
             row = cursor.fetchone()
             return row[7] if row else ""
 
