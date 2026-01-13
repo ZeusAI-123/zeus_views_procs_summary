@@ -1,5 +1,14 @@
 import streamlit as st
-import requests
+
+# =========================
+# SQL Server imports
+# =========================
+from db_connection import get_connection as get_sqlserver_connection
+from metadata_reader import (
+    get_all_views,
+    get_all_procedures,
+    get_object_definition
+)
 
 # =========================
 # Snowflake imports
@@ -14,34 +23,12 @@ from snowflake_metadata_reader import (
 from llm_summary import generate_sql_documentation
 
 # =========================
-# CONFIG
+# PAGE CONFIG
 # =========================
 st.set_page_config(page_title="View & Proc Analyzer", layout="wide")
 
 st.title("📊 SQL View & Procedure Analyzer (Read-Only)")
-st.info(
-    "🔒 Read-only documentation tool. "
-    "No SQL objects are executed or modified."
-)
-
-# =========================
-# SQL SERVER BACKEND API
-# =========================
-# 👉 Replace this with your backend URL
-SQLSERVER_API_BASE = "http://YOUR_BACKEND_IP:8000"
-
-def get_sqlserver_views_api():
-    return requests.get(f"{SQLSERVER_API_BASE}/views").json()
-
-def get_sqlserver_procs_api():
-    return requests.get(f"{SQLSERVER_API_BASE}/procedures").json()
-
-def get_sqlserver_definition_api(object_name):
-    resp = requests.get(
-        f"{SQLSERVER_API_BASE}/definition",
-        params={"object_name": object_name}
-    )
-    return resp.json().get("definition", "")
+st.info("🔒 Read-only tool. No database objects are modified or executed.")
 
 # =========================
 # SESSION STATE
@@ -66,7 +53,13 @@ st.sidebar.header("🔐 Database Connection")
 # =========================
 # CONNECTION INPUTS
 # =========================
-if db_type == "Snowflake":
+if db_type == "SQL Server":
+    server = st.sidebar.text_input("Server")
+    database = st.sidebar.text_input("Database")
+    username = st.sidebar.text_input("Username")
+    password = st.sidebar.text_input("Password", type="password")
+
+elif db_type == "Snowflake":
     account = st.sidebar.text_input("Account (e.g. ab12345.ap-south-1)")
     warehouse = st.sidebar.text_input("Warehouse")
     database = st.sidebar.text_input("Database")
@@ -74,18 +67,20 @@ if db_type == "Snowflake":
     username = st.sidebar.text_input("Username")
     password = st.sidebar.text_input("Password", type="password")
 
-else:
-    st.sidebar.info(
-        "ℹ️ SQL Server is accessed via a secured backend service.\n\n"
-        "No direct DB connection is made from Streamlit Cloud."
-    )
-
 # =========================
 # CONNECT
 # =========================
 if st.sidebar.button("Connect"):
     try:
-        if db_type == "Snowflake":
+        if db_type == "SQL Server":
+            conn = get_sqlserver_connection(
+                server.strip(),
+                database.strip(),
+                username.strip(),
+                password.strip()
+            )
+
+        else:
             conn = get_snowflake_connection(
                 account.strip(),
                 username.strip(),
@@ -95,41 +90,33 @@ if st.sidebar.button("Connect"):
                 schema.strip()
             )
 
-            # Set Snowflake context
+            # IMPORTANT: set context explicitly
             cursor = conn.cursor()
             cursor.execute(f"USE DATABASE {database}")
             cursor.execute(f"USE SCHEMA {schema}")
             cursor.close()
 
-            st.session_state.conn = conn
-            st.sidebar.success("Connected to Snowflake")
-
-        else:
-            # SQL Server uses backend API – no DB connection here
-            st.session_state.conn = "SQLSERVER_API"
-            st.sidebar.success("Connected to SQL Server (via backend API)")
+        st.session_state.conn = conn
+        st.sidebar.success(f"Connected to {db_type}")
 
     except Exception as e:
         st.sidebar.error(str(e))
 
 # =========================
-# MAIN CONTENT
+# MAIN UI
 # =========================
 if st.session_state.conn:
 
+    conn = st.session_state.conn
     col1, col2 = st.columns(2)
 
-    # =========================
-    # FETCH METADATA
-    # =========================
     try:
-        if db_type == "Snowflake":
-            views = get_all_views_sf(st.session_state.conn)
-            procs = get_all_procedures_sf(st.session_state.conn)
+        if db_type == "SQL Server":
+            views = get_all_views(conn)
+            procs = get_all_procedures(conn)
         else:
-            views = get_sqlserver_views_api()
-            procs = get_sqlserver_procs_api()
-
+            views = get_all_views_sf(conn)
+            procs = get_all_procedures_sf(conn)
     except Exception as e:
         st.error(f"Failed to fetch metadata: {e}")
         st.stop()
@@ -141,27 +128,21 @@ if st.session_state.conn:
         selected_proc = st.selectbox("⚙️ Select a Stored Procedure", [""] + procs)
 
     # =========================
-    # VIEW DOCUMENTATION
+    # VIEW DOC
     # =========================
     if selected_view:
-        if db_type == "Snowflake":
-            sql_text = get_object_definition_sf(
-                st.session_state.conn,
-                selected_view,
-                "view"
-            )
-        else:
-            sql_text = get_sqlserver_definition_api(selected_view)
+        sql_text = (
+            get_object_definition(conn, selected_view)
+            if db_type == "SQL Server"
+            else get_object_definition_sf(conn, selected_view, "view")
+        )
 
         st.subheader(f"📝 View Documentation: {selected_view}")
 
         if st.button("Generate View Documentation"):
-            with st.spinner("Generating documentation..."):
-                st.session_state.view_doc = generate_sql_documentation(
-                    selected_view,
-                    "view",
-                    sql_text
-                )
+            st.session_state.view_doc = generate_sql_documentation(
+                selected_view, "view", sql_text
+            )
 
         if st.session_state.view_doc:
             st.markdown(st.session_state.view_doc)
@@ -173,27 +154,21 @@ if st.session_state.conn:
             )
 
     # =========================
-    # PROCEDURE DOCUMENTATION
+    # PROC DOC
     # =========================
     if selected_proc:
-        if db_type == "Snowflake":
-            sql_text = get_object_definition_sf(
-                st.session_state.conn,
-                selected_proc,
-                "procedure"
-            )
-        else:
-            sql_text = get_sqlserver_definition_api(selected_proc)
+        sql_text = (
+            get_object_definition(conn, selected_proc)
+            if db_type == "SQL Server"
+            else get_object_definition_sf(conn, selected_proc, "procedure")
+        )
 
         st.subheader(f"📝 Procedure Documentation: {selected_proc}")
 
         if st.button("Generate Procedure Documentation"):
-            with st.spinner("Generating documentation..."):
-                st.session_state.proc_doc = generate_sql_documentation(
-                    selected_proc,
-                    "procedure",
-                    sql_text
-                )
+            st.session_state.proc_doc = generate_sql_documentation(
+                selected_proc, "procedure", sql_text
+            )
 
         if st.session_state.proc_doc:
             st.markdown(st.session_state.proc_doc)
