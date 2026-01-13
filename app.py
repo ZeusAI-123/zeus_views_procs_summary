@@ -31,9 +31,9 @@ st.title("📊 SQL View & Procedure Analyzer (Read-Only)")
 st.info("🔒 Read-only tool. No database objects are modified or executed.")
 
 # =========================
-# SESSION STATE
+# SESSION STATE INIT
 # =========================
-for key in ["conn", "view_doc", "proc_doc"]:
+for key in ["conn", "view_doc", "proc_doc", "last_db_type", "last_sf_context"]:
     if key not in st.session_state:
         st.session_state[key] = None if key == "conn" else ""
 
@@ -46,6 +46,11 @@ db_type = st.sidebar.selectbox(
     "Select Database",
     ["SQL Server", "Snowflake"]
 )
+
+# 🔥 Reset connection if DB type changes
+if st.session_state.last_db_type and st.session_state.last_db_type != db_type:
+    st.session_state.conn = None
+st.session_state.last_db_type = db_type
 
 st.sidebar.divider()
 st.sidebar.header("🔐 Database Connection")
@@ -66,6 +71,12 @@ elif db_type == "Snowflake":
     schema = st.sidebar.text_input("Schema")
     username = st.sidebar.text_input("Username")
     password = st.sidebar.text_input("Password", type="password")
+
+    # 🔥 Reset Snowflake connection if DB or schema changes
+    sf_key = f"{account}_{database}_{schema}"
+    if st.session_state.last_sf_context and st.session_state.last_sf_context != sf_key:
+        st.session_state.conn = None
+    st.session_state.last_sf_context = sf_key
 
 # =========================
 # CONNECT
@@ -90,7 +101,7 @@ if st.sidebar.button("Connect"):
                 schema.strip()
             )
 
-            # IMPORTANT: set context explicitly
+            # 🔥 HARD RESET CONTEXT (VERY IMPORTANT)
             cursor = conn.cursor()
             cursor.execute(f"USE DATABASE {database}")
             cursor.execute(f"USE SCHEMA {schema}")
