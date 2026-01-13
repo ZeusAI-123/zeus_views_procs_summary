@@ -1,6 +1,6 @@
 import snowflake.connector
 
-def connect_snowflake(
+def get_snowflake_connection(
     account,
     user,
     password,
@@ -9,12 +9,16 @@ def connect_snowflake(
     schema,
     role=None
 ):
-    return snowflake.connector.connect(
-        account=account,
-        user=user,
-        password=password,
-        warehouse=warehouse,
-        database=database,
-        schema=schema,
-        role=role
-    )
+    try:
+        conn = snowflake.connector.connect(
+            account=account,
+            user=user,
+            password=password,
+            warehouse=warehouse,
+            database=database,
+            schema=schema,
+            role=role
+        )
+        return conn
+    except Exception as e:
+        raise Exception(f"Snowflake connection failed: {e}")
